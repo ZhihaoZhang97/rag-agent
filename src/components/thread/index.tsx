@@ -30,13 +30,7 @@ import { toast } from "sonner";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { Label } from "../ui/label";
 import { Switch } from "../ui/switch";
-import { GitHubSVG } from "../icons/github";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "../ui/tooltip";
+// Removed GitHub icon and tooltip imports
 import { useFileUpload } from "@/hooks/use-file-upload";
 import { ContentBlocksPreview } from "./ContentBlocksPreview";
 import {
@@ -45,6 +39,7 @@ import {
   ArtifactTitle,
   useArtifactContext,
 } from "./artifact";
+import { DocumentSidebarToggle } from "@/components/document-sidebar/toggle-button";
 
 function StickyToBottomContent(props: {
   content: ReactNode;
@@ -87,29 +82,7 @@ function ScrollToBottom(props: { className?: string }) {
   );
 }
 
-function OpenGitHubRepo() {
-  return (
-    <TooltipProvider>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <a
-            href="https://github.com/langchain-ai/agent-chat-ui"
-            target="_blank"
-            className="flex items-center justify-center"
-          >
-            <GitHubSVG
-              width="24"
-              height="24"
-            />
-          </a>
-        </TooltipTrigger>
-        <TooltipContent side="left">
-          <p>Open GitHub repo</p>
-        </TooltipContent>
-      </Tooltip>
-    </TooltipProvider>
-  );
-}
+// Removed GitHub icon component
 
 export function Thread() {
   const [artifactContext, setArtifactContext] = useArtifactContext();
@@ -137,6 +110,9 @@ export function Thread() {
   } = useFileUpload();
   const [firstTokenReceived, setFirstTokenReceived] = useState(false);
   const isLargeScreen = useMediaQuery("(min-width: 1024px)");
+  const isSmUp = useMediaQuery("(min-width: 640px)");
+  const sidebarWidth = isSmUp ? 450 : 350;
+  const { documentSidebarOpen } = require("@/providers/Documents").useDocuments();
 
   const stream = useStreamContext();
   const messages = stream.messages;
@@ -183,16 +159,36 @@ export function Thread() {
   // TODO: this should be part of the useStream hook
   const prevMessageLength = useRef(0);
   useEffect(() => {
-    if (
-      messages.length !== prevMessageLength.current &&
-      messages?.length &&
-      messages[messages.length - 1].type === "ai"
-    ) {
-      setFirstTokenReceived(true);
+    if (messages.length > prevMessageLength.current && messages?.length) {
+      // Check if the last message is an AI message with content
+      const lastMessage = messages[messages.length - 1];
+      if (lastMessage.type === "ai" && lastMessage.content && 
+          (Array.isArray(lastMessage.content) ? lastMessage.content.length > 0 : lastMessage.content.length > 0)) {
+        setFirstTokenReceived(true);
+      }
     }
 
     prevMessageLength.current = messages.length;
   }, [messages]);
+
+  // Check if we have any AI messages at all to prevent flickering
+  const hasAnyAIMessages = messages.some(m => m.type === "ai");
+  
+  // More robust loading state check to prevent message disappearing
+  const shouldShowLoadingIndicator = isLoading && !firstTokenReceived && (!hasAnyAIMessages || messages.length === 0);
+  
+  // Additional safeguard: if we have AI messages but no firstTokenReceived, and we're not loading, ensure we set it
+  useEffect(() => {
+    if (hasAnyAIMessages && !isLoading && !firstTokenReceived) {
+      const hasAIMessageWithContent = messages.some(m => 
+        m.type === "ai" && m.content && 
+        (Array.isArray(m.content) ? m.content.length > 0 : m.content.length > 0)
+      );
+      if (hasAIMessageWithContent) {
+        setFirstTokenReceived(true);
+      }
+    }
+  }, [hasAnyAIMessages, isLoading, firstTokenReceived, messages]);
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
@@ -241,6 +237,7 @@ export function Thread() {
   ) => {
     // Do this so the loading state is correct
     prevMessageLength.current = prevMessageLength.current - 1;
+    // Reset firstTokenReceived for regeneration to show proper loading state
     setFirstTokenReceived(false);
     stream.submit(undefined, {
       checkpoint: parentCheckpoint,
@@ -296,11 +293,8 @@ export function Thread() {
           layout={isLargeScreen}
           animate={{
             marginLeft: chatHistoryOpen ? (isLargeScreen ? 300 : 0) : 0,
-            width: chatHistoryOpen
-              ? isLargeScreen
-                ? "calc(100% - 300px)"
-                : "100%"
-              : "100%",
+            marginRight: documentSidebarOpen ? sidebarWidth : 0,
+            width: `calc(100% - ${chatHistoryOpen && isLargeScreen ? 300 : 0}px - ${documentSidebarOpen ? sidebarWidth : 0}px)`,
           }}
           transition={
             isLargeScreen
@@ -325,8 +319,8 @@ export function Thread() {
                   </Button>
                 )}
               </div>
-              <div className="absolute top-2 right-4 flex items-center">
-                <OpenGitHubRepo />
+              <div className="absolute top-2 right-4 flex items-center gap-2">
+                <DocumentSidebarToggle />
               </div>
             </div>
           )}
@@ -371,9 +365,7 @@ export function Thread() {
               </div>
 
               <div className="flex items-center gap-4">
-                <div className="flex items-center">
-                  <OpenGitHubRepo />
-                </div>
+                <DocumentSidebarToggle />
                 <TooltipIconButton
                   size="lg"
                   className="p-4"
@@ -427,7 +419,7 @@ export function Thread() {
                       handleRegenerate={handleRegenerate}
                     />
                   )}
-                  {isLoading && !firstTokenReceived && (
+                  {shouldShowLoadingIndicator && (
                     <AssistantMessageLoading />
                   )}
                 </>
