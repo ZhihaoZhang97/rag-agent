@@ -4,7 +4,7 @@ import tempfile
 from fastapi import UploadFile
 from typing import Dict, List, Any
 import logging
-
+import chromadb
 from dotenv import load_dotenv
 from langchain_experimental.text_splitter import SemanticChunker
 from langchain_community.document_loaders import (
@@ -23,6 +23,7 @@ logger = logging.getLogger(__name__)
 
 DASHSCOPE_MODEL = os.getenv("DASHSCOPE_EMBEDDINGS_MODEL", "text-embedding-v4")
 DASHSCOPE_API_KEY = os.getenv("DASHSCOPE_API_KEY")
+CHROMADB_API_KEY = os.getenv("CHROMADB_API_KEY")
 
 # If DASHSCOPE_API_KEY is not provided here, DashScopeEmbeddings will read it
 # from the environment variable DASHSCOPE_API_KEY internally.
@@ -32,12 +33,6 @@ embeddings = (
     else DashScopeEmbeddings(model=DASHSCOPE_MODEL)
 )
 vector_store = None
-_embedding_dimension = None  # lazily determined
-_persist_directory = os.path.join(
-    os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")),
-    "data",
-    "vectordb",
-)
 
 
 def load_documents(file_path: str, filename: str) -> List[Document]:
@@ -82,27 +77,20 @@ def load_documents(file_path: str, filename: str) -> List[Document]:
         raise
 
 
-def _ensure_persist_dir() -> None:
-    try:
-        os.makedirs(_persist_directory, exist_ok=True)
-    except Exception:
-        pass
-
-
 # Initialize the vector store
 def init_vector_store():
     global vector_store
     if vector_store is None:
-        _ensure_persist_dir()
+        client = chromadb.CloudClient(
+            api_key=CHROMADB_API_KEY,
+            tenant='fab68d49-41be-47f4-9be3-0fdd622654a4',
+            database='rag-agent'
+        )
+
         vector_store = Chroma(
             collection_name="documents",
             embedding_function=embeddings,
-            persist_directory=_persist_directory,
-        )
-        logger.info(
-            "Chroma vector store initialized (collection=%s, dir=%s)",
-            "documents",
-            _persist_directory,
+            client=client,
         )
     return vector_store
 
@@ -159,13 +147,12 @@ async def process_document(file: UploadFile, doc_id: str) -> Dict[str, Any]:
             vs = init_vector_store()
             vs.add_documents(chunks)
             # Persist to disk after adding
-            vs.persist()
+            # vs.persist()
             logger.info(
                 "Chroma upsert success for '%s' (%d chunks) in %.2fs (dir=%s)",
                 file.filename,
                 len(chunks),
                 time.time() - t2,
-                _persist_directory,
             )
         except Exception as e:
             logger.exception(
@@ -213,7 +200,6 @@ async def list_documents() -> List[Dict[str, Any]]:
     except Exception as e:
         logger.exception(
             "Failed to list documents from Chroma (dir=%s): %s: %s",
-            _persist_directory,
             type(e).__name__,
             str(e),
         )
@@ -233,7 +219,6 @@ async def delete_document(filename: str) -> bool:
     except Exception as e:
         logger.exception(
             "Failed to delete document by filename from Chroma (dir=%s, filename=%s): %s: %s",
-            _persist_directory,
             filename,
             type(e).__name__,
             str(e),
