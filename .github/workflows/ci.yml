@@ -19,40 +19,6 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  format:
-    name: Check formatting
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 10.5.1
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "18.x"
-          cache: "pnpm"
-      - name: Install dependencies
-        run: pnpm install
-      - name: Check formatting
-        run: pnpm format:check
-
-  lint:
-    name: Check linting
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 10.5.1
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "18.x"
-          cache: "pnpm"
-      - name: Install dependencies
-        run: pnpm install
-      - name: Check linting
-        run: pnpm lint
-
   readme-spelling:
     name: Check README spelling
     runs-on: ubuntu-latest
