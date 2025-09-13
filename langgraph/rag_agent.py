@@ -4,6 +4,7 @@ from langchain_core.output_parsers import StrOutputParser
 from langchain_core.pydantic_v1 import BaseModel, Field
 from langchain_core.messages import BaseMessage, HumanMessage, AIMessage
 import os
+import chromadb
 from langchain.schema import Document
 from langchain_community.vectorstores import Chroma
 from langchain_community.embeddings.dashscope import DashScopeEmbeddings
@@ -23,19 +24,23 @@ llm = ChatOpenAI(model_name=model, temperature=0)
 # Use the same embeddings as the backend (DashScope) to ensure dimension match
 DASHSCOPE_MODEL = os.getenv("DASHSCOPE_EMBEDDINGS_MODEL", "text-embedding-v4")
 DASHSCOPE_API_KEY = os.getenv("DASHSCOPE_API_KEY")
+CHROMADB_API_KEY = os.getenv("CHROMADB_API_KEY")
 embeddings = (
     DashScopeEmbeddings(model=DASHSCOPE_MODEL, dashscope_api_key=DASHSCOPE_API_KEY)
     if DASHSCOPE_API_KEY
     else DashScopeEmbeddings(model=DASHSCOPE_MODEL)
 )
-
-persist_directory = os.path.abspath(
-    os.path.join(os.path.dirname(__file__), "..", "backend", "data", "vectordb")
+  
+client = chromadb.CloudClient(
+    api_key=CHROMADB_API_KEY,
+    tenant='fab68d49-41be-47f4-9be3-0fdd622654a4',
+    database='rag-agent'
 )
+
 vectorstore = Chroma(
     collection_name="documents",
     embedding_function=embeddings,
-    persist_directory=persist_directory,
+    client=client,
 )
 retriever = vectorstore.as_retriever(k=4)
 
