@@ -1,7 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { useThreads } from "@/providers/Thread";
 import { Thread } from "@langchain/langgraph-sdk";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 
 import { getContentString } from "../utils";
 import { useQueryState, parseAsBoolean } from "nuqs";
@@ -12,8 +12,9 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { Skeleton } from "@/components/ui/skeleton";
-import { PanelRightOpen, PanelRightClose } from "lucide-react";
+import { PanelRightOpen, PanelRightClose, X } from "lucide-react";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
+import { toast } from "sonner";
 
 function ThreadList({
   threads,
@@ -23,6 +24,32 @@ function ThreadList({
   onThreadClick?: (threadId: string) => void;
 }) {
   const [threadId, setThreadId] = useQueryState("threadId");
+  const { deleteThread } = useThreads();
+  const [deletingThreadId, setDeletingThreadId] = useState<string | null>(null);
+
+  const handleDeleteThread = async (threadIdToDelete: string, e: React.MouseEvent) => {
+    e.stopPropagation(); // Prevent thread selection when clicking delete
+    
+    if (!confirm("Are you sure you want to delete this thread? This action cannot be undone.")) {
+      return;
+    }
+
+    setDeletingThreadId(threadIdToDelete);
+    try {
+      await deleteThread(threadIdToDelete);
+      toast.success("Thread deleted successfully");
+      
+      // If we're deleting the currently selected thread, clear the selection
+      if (threadId === threadIdToDelete) {
+        setThreadId(null);
+      }
+    } catch (error) {
+      console.error("Failed to delete thread:", error);
+      toast.error("Failed to delete thread");
+    } finally {
+      setDeletingThreadId(null);
+    }
+  };
 
   return (
     <div className="flex h-full w-full flex-col items-start justify-start gap-2 overflow-y-scroll [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-300 [&::-webkit-scrollbar-track]:bg-transparent">
@@ -38,23 +65,37 @@ function ThreadList({
           const firstMessage = t.values.messages[0];
           itemText = getContentString(firstMessage.content);
         }
+        const isDeleting = deletingThreadId === t.thread_id;
+        const isSelected = threadId === t.thread_id;
+        
         return (
           <div
             key={t.thread_id}
-            className="w-full px-1"
+            className="group relative w-full px-1"
           >
-            <Button
-              variant="ghost"
-              className="w-[280px] items-start justify-start text-left font-normal"
-              onClick={(e) => {
-                e.preventDefault();
-                onThreadClick?.(t.thread_id);
-                if (t.thread_id === threadId) return;
-                setThreadId(t.thread_id);
-              }}
-            >
-              <p className="truncate text-ellipsis">{itemText}</p>
-            </Button>
+            <div className={`relative flex items-center w-[280px] rounded-md hover:bg-gray-50 ${isSelected ? 'bg-gray-100' : ''}`}>
+              <Button
+                variant="ghost"
+                className="flex-1 items-start justify-start pr-8 text-left font-normal hover:bg-transparent"
+                onClick={(e) => {
+                  e.preventDefault();
+                  onThreadClick?.(t.thread_id);
+                  if (t.thread_id === threadId) return;
+                  setThreadId(t.thread_id);
+                }}
+                disabled={isDeleting}
+              >
+                <p className="truncate text-ellipsis">{itemText}</p>
+              </Button>
+              <button
+                className="opacity-0 group-hover:opacity-100 absolute right-2 h-6 w-6 rounded-sm hover:bg-red-100 hover:text-red-600 transition-all flex items-center justify-center"
+                onClick={(e) => handleDeleteThread(t.thread_id, e)}
+                disabled={isDeleting}
+                title="Delete thread"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </div>
           </div>
         );
       })}

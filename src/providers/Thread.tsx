@@ -15,6 +15,7 @@ import { createClient } from "./client";
 
 interface ThreadContextType {
   getThreads: () => Promise<Thread[]>;
+  deleteThread: (threadId: string) => Promise<void>;
   threads: Thread[];
   setThreads: Dispatch<SetStateAction<Thread[]>>;
   threadsLoading: boolean;
@@ -39,22 +40,41 @@ export function ThreadProvider({ children }: { children: ReactNode }) {
   const [threads, setThreads] = useState<Thread[]>([]);
   const [threadsLoading, setThreadsLoading] = useState(false);
 
+  // Get environment variables as fallbacks
+  const envApiUrl: string | undefined = process.env.NEXT_PUBLIC_API_URL;
+  const envAssistantId: string | undefined = process.env.NEXT_PUBLIC_ASSISTANT_ID;
+
+  // Determine final values to use, prioritizing URL params then env vars
+  const finalApiUrl = apiUrl || envApiUrl;
+  const finalAssistantId = assistantId || envAssistantId;
+
   const getThreads = useCallback(async (): Promise<Thread[]> => {
-    if (!apiUrl || !assistantId) return [];
-    const client = createClient(apiUrl, getApiKey() ?? undefined);
+    if (!finalApiUrl || !finalAssistantId) return [];
+    const client = createClient(finalApiUrl, getApiKey() ?? undefined);
 
     const threads = await client.threads.search({
       metadata: {
-        ...getThreadSearchMetadata(assistantId),
+        ...getThreadSearchMetadata(finalAssistantId),
       },
       limit: 100,
     });
 
     return threads;
-  }, [apiUrl, assistantId]);
+  }, [finalApiUrl, finalAssistantId]);
+
+  const deleteThread = useCallback(async (threadId: string): Promise<void> => {
+    if (!finalApiUrl) throw new Error("API URL not configured");
+    const client = createClient(finalApiUrl, getApiKey() ?? undefined);
+    
+    await client.threads.delete(threadId);
+    
+    // Remove the thread from the local state
+    setThreads(prev => prev.filter(thread => thread.thread_id !== threadId));
+  }, [finalApiUrl]);
 
   const value = {
     getThreads,
+    deleteThread,
     threads,
     setThreads,
     threadsLoading,
