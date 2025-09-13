@@ -20,6 +20,22 @@ export function DocumentSidebar() {
   
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [deletingDocumentId, setDeletingDocumentId] = useState<string | null>(null);
+
+  const handleDeleteDocument = async (documentId: string, filename: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    
+    if (!confirm(`Are you sure you want to delete "${filename}"? This action cannot be undone.`)) {
+      return;
+    }
+
+    setDeletingDocumentId(documentId);
+    try {
+      await deleteFile(documentId);
+    } finally {
+      setDeletingDocumentId(null);
+    }
+  };
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
@@ -110,33 +126,39 @@ export function DocumentSidebar() {
               </div>
             ) : (
               <div className="space-y-2">
-                {documents.map((doc) => (
-                  <div
-                    key={doc.document_id}
-                    className="flex items-center justify-between rounded-md border p-2"
-                  >
-                    <div className="flex items-center space-x-2">
-                      <FileText className="h-5 w-5 text-blue-500" />
-                      <div>
-                        <p className="text-sm font-medium truncate max-w-[250px]">
-                          {doc.filename}
-                        </p>
-                        <p className="text-xs text-gray-500">
-                          {doc.chunks} chunks
-                        </p>
-                      </div>
-                    </div>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => deleteFile(doc.document_id)}
-                      className="text-gray-500 hover:text-red-500"
+                {documents.map((doc) => {
+                  const isDeleting = deletingDocumentId === doc.document_id;
+                  
+                  return (
+                    <div
+                      key={doc.document_id}
+                      className="flex items-center justify-between rounded-md border p-2"
                     >
-                      <Trash2 className="h-4 w-4" />
-                      <span className="sr-only">Delete</span>
-                    </Button>
-                  </div>
-                ))}
+                      <div className="flex items-center space-x-2">
+                        <FileText className="h-5 w-5 text-blue-500" />
+                        <div>
+                          <p className="text-sm font-medium truncate max-w-[250px]">
+                            {doc.filename}
+                          </p>
+                          <p className="text-xs text-gray-500">
+                            {doc.chunks} chunks
+                          </p>
+                        </div>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={(e) => handleDeleteDocument(doc.document_id, doc.filename, e)}
+                        className="text-gray-500 hover:text-red-500"
+                        disabled={isDeleting}
+                        title={`Delete ${doc.filename}`}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                        <span className="sr-only">Delete</span>
+                      </Button>
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>
