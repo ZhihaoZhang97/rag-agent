@@ -101,7 +101,7 @@ export function DocumentSidebar() {
                   type="file"
                   className="hidden"
                   onChange={handleFileChange}
-                  accept=".pdf,.txt,.docx"
+                  accept=".pdf,.txt,.docx,.md"
                 />
               </div>
             </div>
