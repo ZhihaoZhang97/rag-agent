@@ -56,8 +56,8 @@ Located in the `/langgraph` directory, this contains the core AI logic:
 ### 1. Clone and Initial Setup
 
 ```bash
-git clone https://github.com/langchain-ai/agent-chat-ui.git
-cd agent-chat-ui
+git clone https://github.com/ZhihaoZhang97/rag-agent
+cd rag-agent
 ```
 
 ### 2. Frontend Setup
