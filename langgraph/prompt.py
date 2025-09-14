@@ -48,12 +48,10 @@ document_grade_prompt = ChatPromptTemplate.from_messages(
 
 # Query Rewriting Prompt
 query_rewrite_prompt = PromptTemplate(
-    template="""Look at the input and try to reason about the underlying semantic intent / meaning.
-
-Here is the initial question:
-------- 
+    template="""<Task> Look at the input and try to reason about the underlying semantic intent / meaning, then formulate an improved question: </Task>
+<question>
 {question}
-------- 
-Formulate an improved question:""",
+</question>
+""",
     input_variables=["question"],
 )
