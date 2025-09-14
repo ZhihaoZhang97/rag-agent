@@ -127,7 +127,7 @@ async def process_document(file: UploadFile, doc_id: str) -> Dict[str, Any]:
 
         # Split the document into semantic chunks using DashScope embeddings
         t1 = time.time()
-        text_splitter = SemanticChunker(embeddings)
+        text_splitter = SemanticChunker(embeddings, breakpoint_threshold_type="gradient")
         chunks: List[Document] = []
         for d in documents:
             pieces = text_splitter.create_documents(
@@ -171,7 +171,7 @@ async def process_document(file: UploadFile, doc_id: str) -> Dict[str, Any]:
 
 
 async def list_documents() -> List[Dict[str, Any]]:
-    """List documents aggregated by filename using Milvus filter-style query on JSON metadata.
+    """List documents aggregated by filename.
 
     Returns a list of objects with `document_id` set to the filename so the
     frontend can use filename as the stable key and for deletion.
@@ -179,7 +179,7 @@ async def list_documents() -> List[Dict[str, Any]]:
     try:
         vs = init_vector_store()
         # Access underlying Chroma collection to fetch metadatas
-        raw = vs._collection.get(include=["metadatas"])  # type: ignore[attr-defined]
+        raw = vs._collection.get(include=["metadatas"])
         metadatas = raw.get("metadatas", []) if isinstance(raw, dict) else []
         documents_by_filename: Dict[str, Dict[str, Any]] = {}
         for md in metadatas:
@@ -214,7 +214,7 @@ async def delete_document(filename: str) -> bool:
     try:
         vs = init_vector_store()
         # Delete by metadata filter
-        vs._collection.delete(where={"filename": filename})  # type: ignore[attr-defined]
+        vs._collection.delete(where={"filename": filename})
         return True
     except Exception as e:
         logger.exception(
