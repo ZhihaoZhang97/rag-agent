@@ -149,8 +149,8 @@ NEXT_PUBLIC_ASSISTANT_ID=rag_agent
 
 ```mermaid
 graph TD
-    A[User Interface<br/>Next.js Frontend<br/>:3000] --> B[FastAPI Backend<br/>:8000]
-    A --> C[LangGraph Dev Server<br/>:2024]
+    A[User Interface<br/>Next.js Frontend<br/>localhost:3000] --> B[FastAPI Backend<br/>localhost:8000]
+    A --> C[LangGraph Dev Server<br/>localhost:2024]
 
     B --> D[Document Processing]
     B --> E[File Management]
@@ -158,10 +158,10 @@ graph TD
 
     C --> G[RAG Agent<br/>rag_agent.py]
     G --> H[Document Retrieval<br/>nodes.py]
-    G --> I[LLM Processing<br/>ChatGPT/Claude]
+    G <--> I[LLM Processing<br/>GPT-4o]
     G --> J[Response Generation]
 
-    F --> H
+    F <--> H
     H --> K[Context Augmentation]
     K --> I
     I --> J
@@ -175,39 +175,7 @@ graph TD
 
 ### System Components Diagram
 
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│                        FRONTEND LAYER                               │
-│  ┌─────────────────────────────────────────────────────────────┐   │
-│  │              Next.js Chat Interface                         │   │
-│  │  • Real-time chat UI                                       │   │
-│  │  • Streaming responses                                      │   │
-│  │  • Artifact rendering                                       │   │
-│  │  • Authentication                                           │   │
-│  └─────────────────────────────────────────────────────────────┘   │
-└─────────────────────────────────────────────────────────────────────┘
-                                  │
-                    ┌─────────────┴─────────────┐
-                    │                           │
-                    ▼                           ▼
-┌─────────────────────────────────┐    ┌─────────────────────────────────┐
-│        BACKEND LAYER            │    │        AI LAYER                 │
-│  ┌───────────────────────────┐  │    │  ┌───────────────────────────┐  │
-│  │      FastAPI Server       │  │    │  │     LangGraph Engine      │  │
-│  │  • REST API endpoints     │  │    │  │  • RAG Agent workflow     │  │
-│  │  • File upload/processing │  │    │  │  • Custom nodes           │  │
-│  │  • Document management    │  │    │  │  • State management       │  │
-│  │  • Integration layer      │  │    │  │  • Prompt engineering     │  │
-│  └───────────────────────────┘  │    │  └───────────────────────────┘  │
-│                                 │    │                                 │
-│  ┌───────────────────────────┐  │    │  ┌───────────────────────────┐  │
-│  │     Vector Database       │  │    │  │      LLM Integration      │  │
-│  │  • ChromaDB storage       │  │    │  │  • OpenAI/Anthropic APIs  │  │
-│  │  • Document embeddings    │  │    │  │  • Context augmentation   │  │
-│  │  • Similarity search      │  │    │  │  • Response generation    │  │
-│  └───────────────────────────┘  │    │  └───────────────────────────┘  │
-└─────────────────────────────────┘    └─────────────────────────────────┘
-```
+![System Architecture](static/system.png)
 
 ### Data Flow Pipeline
 
