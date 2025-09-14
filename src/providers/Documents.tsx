@@ -15,8 +15,17 @@ import {
   deleteDocument 
 } from "@/lib/document-service";
 
+interface UploadingDocument {
+  id: string;
+  originalName: string;
+  sanitizedName: string;
+  progress: number;
+  fileType: string;
+}
+
 interface DocumentsContextType {
   documents: DocumentInfo[];
+  uploadingDocuments: UploadingDocument[];
   isLoading: boolean;
   documentSidebarOpen: boolean;
   setDocumentSidebarOpen: (open: boolean) => void;
@@ -31,6 +40,7 @@ export const DocumentsProvider: React.FC<{ children: ReactNode }> = ({
   children,
 }) => {
   const [documents, setDocuments] = useState<DocumentInfo[]>([]);
+  const [uploadingDocuments, setUploadingDocuments] = useState<UploadingDocument[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [documentSidebarOpen, setDocumentSidebarOpen] = useQueryState(
     "documentSidebarOpen",
@@ -55,13 +65,76 @@ export const DocumentsProvider: React.FC<{ children: ReactNode }> = ({
     refreshDocuments();
   }, [refreshDocuments]);
 
+  const sanitizeFilename = (filename: string): string => {
+    return filename.replace(/\s+/g, '_');
+  };
+
+  const getFileExtension = (filename: string): string => {
+    return filename.split('.').pop()?.toLowerCase() || '';
+  };
+
   const uploadFile = useCallback(async (file: File): Promise<DocumentInfo | undefined> => {
-    setIsLoading(true);
+    const uploadId = crypto.randomUUID();
+    const sanitizedName = sanitizeFilename(file.name);
+    const fileType = getFileExtension(file.name);
+    
+    // Add to uploading list with initial progress
+    const uploadingDoc: UploadingDocument = {
+      id: uploadId,
+      originalName: file.name,
+      sanitizedName,
+      progress: 0,
+      fileType
+    };
+    
+    setUploadingDocuments(prev => [...prev, uploadingDoc]);
+    
+    // Small delay to ensure UI renders before starting progress
+    await new Promise(resolve => setTimeout(resolve, 100));
+    
+    // Start with initial progress update to ensure animation is visible
+    setUploadingDocuments(prev => 
+      prev.map(doc => 
+        doc.id === uploadId 
+          ? { ...doc, progress: 5 }
+          : doc
+      )
+    );
+    
+    // Simulate gradual progress updates
+    const progressInterval = setInterval(() => {
+      setUploadingDocuments(prev => 
+        prev.map(doc => {
+          if (doc.id === uploadId) {
+            const increment = Math.random() * 8 + 2; // Random between 2-10
+            const newProgress = Math.min(doc.progress + increment, 85);
+            return { ...doc, progress: newProgress };
+          }
+          return doc;
+        })
+      );
+    }, 300); // Slightly slower for better visibility
+
     try {
       const result = await uploadDocument(file);
+      
+      // Complete progress smoothly
+      setUploadingDocuments(prev => 
+        prev.map(doc => 
+          doc.id === uploadId 
+            ? { ...doc, progress: 100 }
+            : doc
+        )
+      );
+      
+      // Remove from uploading list after a brief delay to show completion
+      setTimeout(() => {
+        setUploadingDocuments(prev => prev.filter(doc => doc.id !== uploadId));
+      }, 800);
+      
       // Refresh to ensure identifiers (document_id) match backend list (filename-based)
       await refreshDocuments();
-      toast.success(`Document "${file.name}" uploaded successfully`);
+      toast.success(`Document "${sanitizedName}" uploaded successfully`);
       return result;
     } catch (error) {
       console.error("Error uploading document:", error);
@@ -70,9 +143,11 @@ export const DocumentsProvider: React.FC<{ children: ReactNode }> = ({
           error instanceof Error ? error.message : "Unknown error"
         }`
       );
+      // Remove from uploading list on error
+      setUploadingDocuments(prev => prev.filter(doc => doc.id !== uploadId));
       return undefined;
     } finally {
-      setIsLoading(false);
+      clearInterval(progressInterval);
     }
   }, [refreshDocuments]);
 
@@ -100,6 +175,7 @@ export const DocumentsProvider: React.FC<{ children: ReactNode }> = ({
     <DocumentsContext.Provider
       value={{
         documents,
+        uploadingDocuments,
         isLoading,
         documentSidebarOpen,
         setDocumentSidebarOpen,
