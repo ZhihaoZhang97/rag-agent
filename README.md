@@ -25,7 +25,7 @@ Located in the `/backend` directory, this FastAPI server provides:
 **Key Dependencies:**
 - FastAPI with Uvicorn
 - LangChain ecosystem integration
-- Document processing (PDF, DOCX)
+- Document processing (PDF, DOCX, TXT, MD)
 - Vector database support (ChromaDB)
 
 ### 3. LangGraph AI Backend
