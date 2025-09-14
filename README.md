@@ -44,8 +44,6 @@ Located in the `/langgraph` directory, this contains the core AI logic:
 - `utils.py` - Helper functions
 - `prompt.py` - Prompt templates
 
-> [!NOTE]
-> 🎥 Watch the video setup guide [here](https://youtu.be/lInrwVnZ83o).
 
 ## Setup
 
