@@ -1,7 +1,7 @@
 from typing import List, Optional
 from typing_extensions import TypedDict
 from langchain_core.output_parsers import StrOutputParser
-from langchain_core.pydantic_v1 import BaseModel, Field
+from pydantic import BaseModel, Field
 from langchain_core.messages import BaseMessage, HumanMessage, AIMessage
 import os
 import chromadb
@@ -11,7 +11,7 @@ from langchain_community.embeddings.dashscope import DashScopeEmbeddings
 from langchain_openai import ChatOpenAI
 from langgraph.graph import END, StateGraph
 from dotenv import load_dotenv
-from prompt import rag_prompt, grader_system_prompt, document_grade_prompt
+from prompt import rag_prompt, grader_system_prompt, document_grade_prompt, query_rewrite_prompt
 
 load_dotenv()
 
@@ -49,8 +49,6 @@ retriever = vectorstore.as_retriever(k=4)
 rag_chain = rag_prompt | llm | StrOutputParser()
 
 ### Retrieval Grader
-
-
 # Data model for the output
 class GradeDocuments(BaseModel):
     """Binary score for relevance check on retrieved documents."""
@@ -64,6 +62,10 @@ class GradeDocuments(BaseModel):
 structured_llm_grader = llm.with_structured_output(GradeDocuments)
 
 retrieval_grader = document_grade_prompt | structured_llm_grader
+
+### Query Rewriter
+
+query_rewriter = query_rewrite_prompt | llm | StrOutputParser()
 
 
 def extract_question_from_messages(messages) -> str:
@@ -152,11 +154,17 @@ class GraphState(TypedDict):
         messages: list of chat messages (required - provided as input from frontend)
         documents: list of retrieved documents (optional - retrieved during workflow)
         steps: list of processing steps taken (optional - built during workflow)
+        rewrite_count: number of times the query has been rewritten (optional - tracks rewrites)
+        should_rewrite: boolean indicating if query should be rewritten (optional - for routing)
+        current_question: current question being used for retrieval (optional - internal working question)
     """
 
     messages: List  # Can be BaseMessage objects or dicts
     documents: Optional[List[Document]]
     steps: Optional[List[str]]
+    rewrite_count: Optional[int]
+    should_rewrite: Optional[bool]
+    current_question: Optional[str]
 
 
 def retrieve(state):
@@ -170,7 +178,14 @@ def retrieve(state):
         state (dict): New key added to state, documents, that contains retrieved documents
     """
     messages = state["messages"]
-    question = extract_question_from_messages(messages)
+    # Use current_question if available (from rewrite), otherwise extract from messages
+    current_question = state.get("current_question")
+    if current_question:
+        question = current_question
+        # Using rewritten question for retrieval
+    else:
+        question = extract_question_from_messages(messages)
+        # Using original question for retrieval
     steps = state.get("steps", [])
 
     try:
@@ -194,7 +209,16 @@ def retrieve(state):
         documents = []  # Return empty list when retrieval fails
 
     steps.append("retrieve_documents")
-    return {"messages": messages, "documents": documents, "steps": steps}
+    rewrite_count = state.get("rewrite_count", 0)
+    # Preserve current_question if it exists
+    current_question = state.get("current_question", question)
+    return {
+        "messages": messages, 
+        "documents": documents, 
+        "steps": steps, 
+        "rewrite_count": rewrite_count,
+        "current_question": current_question
+    }
 
 
 def generate(state):
@@ -212,12 +236,18 @@ def generate(state):
     question = extract_question_from_messages(messages)
     documents = state.get("documents", [])
     steps = state.get("steps", [])
+    rewrite_count = state.get("rewrite_count", 0)
     steps.append("generate_answer")
 
     # Check if no documents are available
     if not documents or len(documents) == 0:
-        print("DEBUG: No documents available, returning 'No related document found.'")
-        generation = "No related document found."
+        # Check if we've already tried rewriting
+        if rewrite_count > 0:
+            print("DEBUG: No documents found after rewriting, returning specialized message")
+            generation = "No documents found with user query and agent re-writing, there is likely no related documents in the current vector database."
+        else:
+            print("DEBUG: No documents available, returning 'No related document found.'")
+            generation = "No related document found."
     else:
         print(f"DEBUG: Generating answer using {len(documents)} documents")
         docs_text = "\n\n".join(d.page_content for d in documents[:10])
@@ -239,33 +269,45 @@ def generate(state):
         "messages": updated_messages,
         "documents": documents,
         "steps": steps,
+        "rewrite_count": rewrite_count,
+        "current_question": state.get("current_question"),
     }
 
 
 def grade_documents(state):
     """
     Determines whether the retrieved documents are relevant to the question.
+    Updates the state with filtered relevant documents.
 
     Args:
         state (dict): The current graph state
 
     Returns:
-        state (dict): Updates documents key with only filtered relevant documents
+        state (dict): Updated state with filtered documents and routing info
     """
 
     messages = state["messages"]
-    question = extract_question_from_messages(messages)
+    # Use current_question if available (from rewrite), otherwise extract from messages
+    current_question = state.get("current_question")
+    if current_question:
+        question = current_question
+    else:
+        question = extract_question_from_messages(messages)
     documents = state.get("documents", [])
     steps = state.get("steps", [])
+    rewrite_count = state.get("rewrite_count", 0)
     steps.append("grade_document_retrieval")
 
     # Handle empty documents list
     if not documents or len(documents) == 0:
-        print("DEBUG: No documents to grade, returning empty list")
+        print("DEBUG: No documents to grade")
         return {
             "messages": messages,
             "documents": [],
             "steps": steps,
+            "rewrite_count": rewrite_count,
+            "should_rewrite": True,
+            "current_question": current_question,
         }
 
     filtered_docs = []
@@ -282,7 +324,7 @@ def grade_documents(state):
                 {"question": question, "documents": d.page_content}
             )
             grade = score.binary_score
-            print(f"DEBUG: Document {i} grade: {grade}")
+            # Removed debug print to avoid exposing grading info to frontend
             if grade == "yes":
                 filtered_docs.append(d)
         except Exception as e:
@@ -291,10 +333,90 @@ def grade_documents(state):
             continue
 
     print(f"DEBUG: After grading, {len(filtered_docs)} relevant documents remain")
+    
+    # Determine if we should rewrite based on document relevance and rewrite count
+    should_rewrite = len(filtered_docs) == 0 and rewrite_count < 1
+    
     return {
         "messages": messages,
         "documents": filtered_docs,
         "steps": steps,
+        "rewrite_count": rewrite_count,
+        "should_rewrite": should_rewrite,
+        "current_question": current_question,
+    }
+
+
+def route_after_grading(state):
+    """
+    Routing function to decide next step after document grading.
+
+    Args:
+        state (dict): The current graph state
+
+    Returns:
+        str: "generate" or "rewrite" based on document relevance and rewrite count
+    """
+    should_rewrite = state.get("should_rewrite", False)
+    rewrite_count = state.get("rewrite_count", 0)
+    
+    # Check if we've already tried rewriting once
+    max_rewrites = 1
+    if rewrite_count >= max_rewrites:
+        print(f"DEBUG: Max rewrite attempts ({max_rewrites}) reached, routing to generate")
+        return "generate"
+    
+    if should_rewrite:
+        print("DEBUG: No relevant documents found, routing to rewrite")
+        return "rewrite"
+    else:
+        print("DEBUG: Relevant documents found, routing to generate")
+        return "generate"
+
+
+def rewrite_question(state):
+    """
+    Rewrite the original user question to improve retrieval.
+    Keep original messages intact for frontend, store rewritten question internally.
+
+    Args:
+        state (dict): The current graph state
+
+    Returns:
+        state (dict): Updated state with rewritten question stored internally
+    """
+    
+    messages = state["messages"]
+    # Use current_question if available, otherwise extract from messages
+    current_question = state.get("current_question")
+    if current_question:
+        question = current_question
+    else:
+        question = extract_question_from_messages(messages)
+    
+    documents = state.get("documents", [])
+    steps = state.get("steps", [])
+    rewrite_count = state.get("rewrite_count", 0)
+    steps.append("rewrite_question")
+    
+    # Increment rewrite count
+    rewrite_count += 1
+    
+    # Rewriting question internally (not exposed to frontend)
+    
+    try:
+        rewritten_question = query_rewriter.invoke({"question": question})
+        # Rewritten question generated successfully
+    except Exception as e:
+        print(f"DEBUG: Question rewriting failed: {str(e)}")
+        rewritten_question = question  # Fall back to original if rewriting fails
+        
+    return {
+        "messages": messages,  # Keep original messages unchanged for frontend
+        "documents": documents,
+        "steps": steps,
+        "rewrite_count": rewrite_count,
+        "current_question": rewritten_question,  # Store rewritten question internally
     }
 
 
@@ -307,12 +429,25 @@ workflow = StateGraph(GraphState)
 # Define the nodes
 workflow.add_node("retrieve", retrieve)  # retrieve
 workflow.add_node("grade_documents", grade_documents)  # grade documents
-workflow.add_node("generate", generate)  # generatae
+workflow.add_node("generate", generate)  # generate
+workflow.add_node("rewrite_question", rewrite_question)  # rewrite question
 
 # Build graph
 workflow.set_entry_point("retrieve")
 workflow.add_edge("retrieve", "grade_documents")
-workflow.add_edge("grade_documents", "generate")
+
+# Add conditional edges based on document grading
+workflow.add_conditional_edges(
+    "grade_documents",
+    route_after_grading,
+    {
+        "generate": "generate",
+        "rewrite": "rewrite_question",
+    },
+)
+
+# After rewriting, go back to retrieve with the new question
+workflow.add_edge("rewrite_question", "retrieve")
 workflow.add_edge("generate", END)
 
 graph = workflow.compile()

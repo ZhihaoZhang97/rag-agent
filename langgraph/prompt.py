@@ -38,3 +38,15 @@ document_grade_prompt = ChatPromptTemplate.from_messages(
         ("human", "FACTS: \n\n {documents} \n\n QUESTION: {question}"),
     ]
 )
+
+# Query Rewriting Prompt
+query_rewrite_prompt = PromptTemplate(
+    template="""Look at the input and try to reason about the underlying semantic intent / meaning.
+
+Here is the initial question:
+------- 
+{question}
+------- 
+Formulate an improved question:""",
+    input_variables=["question"],
+)
