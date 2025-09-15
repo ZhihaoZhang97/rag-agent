@@ -139,6 +139,13 @@ You can bypass the initial setup form by setting the following environment varia
 ```bash
 NEXT_PUBLIC_API_URL=http://localhost:2024
 NEXT_PUBLIC_ASSISTANT_ID=rag_agent
+# Embedding
+DASHSCOPE_API_KEY=sk-...
+DASHSCOPE_EMBEDDINGS_MODEL=text-embedding-v4
+# OpenAI API
+OPENAI_API_KEY=sk-...
+#ChromaDB
+CHROMADB_API_KEY=ck-...
 ```
 
 ## System Architecture
