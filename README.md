@@ -50,7 +50,7 @@ Located in the `/langgraph` directory, this contains the core AI logic:
 ### Prerequisites
 
 - Node.js 18+ and pnpm
-- Python 3.8+
+- Python 3.12+
 - Git
 
 ### 1. Clone and Initial Setup
@@ -70,9 +70,11 @@ pnpm install
 
 ### 3. Backend Setup
 
-Install Python backend dependencies:
+Create a conda environment with Python 3.12 and install dependencies:
 
 ```bash
+conda create -n agent-chat python=3.12 -y
+conda activate agent-chat
 cd backend
 pip install -r requirements.txt
 cd ..
