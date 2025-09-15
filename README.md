@@ -182,6 +182,10 @@ graph TD
 
 ![System Architecture](static/system.png)
 
+### User Activity Diagram
+
+![User Activity](static/activity.png)
+
 ### Data Flow Pipeline
 
 1. **User Input** → Frontend receives user message
