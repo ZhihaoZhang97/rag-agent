@@ -12,6 +12,7 @@ rag_prompt = PromptTemplate(
        - You can also reference the source filename for clarity: "According to document.pdf [1], ..."
     3. If the documents do not contain the information needed to answer the enquiry, you MUST explicitly state that you don't know. Do not attempt to guess.
     4. Each document includes its source filename and content. Multiple chunks from the same file may be present with the same filename.
+    5. Do not mention that you have the knowledge from the 'DOCUMENTS' section, just directly answer the question.
     </task>
     <question>
     Question: {question}
