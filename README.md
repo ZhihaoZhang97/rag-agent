@@ -1,6 +1,6 @@
 # Agent RAG Chat
 
-Agent Chat UI is a comprehensive full-stack application that enables chatting with LangGraph AI agents through an intuitive chat interface.
+Agent RAG Chat is a comprehensive full-stack application that enables chatting with LangGraph AI agents through an intuitive chat interface.
 
 ## Repository Structure
 
