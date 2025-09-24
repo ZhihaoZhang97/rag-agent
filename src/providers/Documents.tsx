@@ -8,11 +8,12 @@ import React, {
 } from "react";
 import { toast } from "sonner";
 import { useQueryState, parseAsBoolean } from "nuqs";
-import { 
-  DocumentInfo, 
-  uploadDocument, 
-  listDocuments, 
-  deleteDocument 
+import { v4 as uuidv4 } from "uuid";
+import {
+  DocumentInfo,
+  uploadDocument,
+  listDocuments,
+  deleteDocument
 } from "@/lib/document-service";
 
 interface UploadingDocument {
@@ -74,7 +75,7 @@ export const DocumentsProvider: React.FC<{ children: ReactNode }> = ({
   };
 
   const uploadFile = useCallback(async (file: File): Promise<DocumentInfo | undefined> => {
-    const uploadId = crypto.randomUUID();
+    const uploadId = uuidv4();
     const sanitizedName = sanitizeFilename(file.name);
     const fileType = getFileExtension(file.name);
     
